@@ -1,0 +1,3 @@
+cd GetPathsFinal
+venv\Scripts\activate
+python run.py

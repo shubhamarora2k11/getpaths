@@ -1,0 +1,250 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Apr 22 12:29:14 2019
+
+@author: SA066118
+"""
+
+
+import pandas as pd
+import networkx as nx
+from operator import itemgetter
+import json, time
+import collections
+
+#read data for join between tables
+df = pd.read_csv("tablefile.csv")
+df["main"] = df["T1"] + " "+df["T2"] 
+#df = df[df['Count']>2]
+#store all tables in series
+table_names = pd.Series()
+table_names = table_names.append(df["T1"])
+table_names= table_names.append(df["T2"])
+table_names.sort_values(inplace=True)
+#create a set of table names
+table_names = set(table_names)
+
+#create dictionaries to store tables
+table_dict = {}
+table_dict_rev = {}
+table_column = {}
+count = 0
+
+for i in table_names:
+    table_dict[i] = count
+    table_dict_rev[count] = i
+    count += 1
+
+#
+#newdf= pd.DataFrame(columns=['Tables','Count'])
+#counter = 0
+#xdf = pd.read_csv("resultwithcountsSTRINGS4.csv")
+#    
+#for i in xdf['table']:
+#    print(i)
+#    string = ""
+#    for table in i.split():
+#        try:
+#            string += str(table_dict[table]) 
+#            string += " "
+#            print(string)
+#        except KeyError:
+#            string += " -1 "
+#            continue
+#    newdf.loc[counter] = [string, xdf['count'][counter]]
+#    counter+=1
+#
+
+#newdf.to_csv('searchfile.csv')
+newdf = pd.read_csv('searchfile.csv')
+
+newdict = {}
+
+for item in table_dict_rev.keys():
+    row_nums = []
+    for row in range(len(newdf)):
+        rowstring = newdf['Tables'][row]
+        print(item, row)
+        rowints = list(map(int, rowstring.split()))
+        print(rowints)    
+        if item in set(rowints):
+            row_nums.append(row)
+    newdict[item] = set(row_nums)
+
+newdict2 = {}
+for (key,value) in newdict.items():
+    newdict2[key] = list(value)
+
+
+temp = json.dumps(newdict2) 
+file  = open ('newdict.txt','w')
+file.write(temp)
+    
+
+with open('newdict.txt') as json_file:  
+    newdict_temp = json.load(json_file)
+
+newdict2 = {}
+for (key,value) in newdict_temp.items():
+    newdict2[key] = set(value)
+
+newdict_temp =newdict2
+print(table_dict['nomenclature'])
+
+
+df["table_column"] = df["T1"] + " " + df["T2"] + "-" + df["T1C"] + " " + df["T2C"] 
+
+for i in df["table_column"]:
+      rz = i.split("-")
+      if rz[0] in table_column:
+           rzz = rz[1].split(" ")
+           azz = table_column[rz[0]].split(" ")
+           
+           continue
+      table_column[rz[0]] = rz[1]
+      
+# create graph 
+G = nx.Graph()
+
+# add tables as graph nodes
+for i  in df["main"]:
+     r = i.split(" ")
+     G.add_edge(table_dict[r[0]],table_dict[r[1]])
+#     G.add_edge(final[r[1]],final[r[0]],weight = float(r[2]))
+
+dictfinal = {}
+total = 0
+
+
+list_of_tables = [table_dict['gl_trans_log']]
+for k in list_of_tables:
+    started = time.time()
+    for j in [table_dict['ce_susceptibility']]:#table_dict_rev: 
+        # choose start and end tables
+        
+        s = k ; d = j
+        if s == d:
+            continue
+        
+        #Find the shortest path from source to destination based on hops
+        paths = [p for p in nx.all_simple_paths(G, source=s, target=d,cutoff = 4)]
+        print(paths)
+        paths_len = []
+        paths_len = paths
+        for i in paths_len:
+            i.append(len(i))
+        
+        paths_len = sorted(paths_len, key=itemgetter(-1))
+          
+            
+        
+        paths_len = paths_len[:100]    
+        for i in paths_len:
+            del i[-1]
+        
+        pathswithcounts = {}
+        
+        newdf  = pd.read_csv('newdf.csv')
+        
+        
+        start = time.time()
+        
+                
+        pather = []
+        hits = []
+        for path in paths_len:
+            counts = 0
+#            print(newdict_temp[str(path[0])])
+            inter = set(newdict_temp[str(path[0])])
+            #print(inter)
+            for table in path[1:]:
+                inter = set.intersection(inter, newdict_temp[str(table)])
+                #print(inter)
+            for row in inter:
+                counts+=newdf['Count'][row]
+             
+            pather.append(counts)
+      
+        end = time.time()
+        
+        print("Time taken: " , end-start)
+        
+        # sort paths based on count values used in scripts
+        final_sort_paths = []    
+        final_sort_paths = paths_len
+        
+        count = 0 
+        for i in final_sort_paths:
+            i.append(len(i))
+            i.append(-1 *pather[count])
+            count = count + 1
+            
+        # = sorted(final_sort_paths, key=itemgetter(-1))
+        final_sort_paths = sorted(final_sort_paths, key = lambda x: (x[-2], x[-1]))
+        pther = []
+        for i in final_sort_paths:
+            pther.append(-1*i[-1])
+            del i[-1]
+            del i[-1] 
+         
+        
+        # Print paths
+        print("Paths-------->" + table_dict_rev[s] + " to " + table_dict_rev[d] + "\n" )
+        ind= 0
+        tables = []
+        columns = []
+        for i in final_sort_paths[:20]:
+            temp = ""
+            for j in i:
+#                print(table_dict_rev[j],end ="->")
+                temp += table_dict_rev[j] + " "
+#            print("end")
+            
+            #print("\n"+ temp)
+            tables.append(temp.split())
+            
+            col = ""
+            sumx = 0
+            for x in range(len(i) - 1):
+                  ys = table_dict_rev[i[x]] + " " + table_dict_rev[i[x + 1]]
+                  try:
+                      nn = table_column[ys]
+                      col = col + nn + " "
+                      
+                  except KeyError:
+                      nn = table_column[table_dict_rev[i[x + 1]] + " " + table_dict_rev[i[x]]]
+                      nns = nn.split(" ")
+                      col = col + nns[1]+ " "+nns[0] +" "
+                      
+#            print(col  + "/ count in used scripts = " + str(pther[ind])+ "\n")
+            columns.append(col.split())
+            
+            ind = ind + 1
+        
+        
+        
+        
+        dictfinal[str((table_dict_rev[s],table_dict_rev[d]))] = [tables,columns]
+#        print(dictfinal)
+        
+        
+#        f = open("dict.txt","a+")
+#        f.write( str(dictfinal) )
+#        f.close()
+#    total = total + 1     
+#    print(total)
+    ended = time.time()
+    print("Total Time Taken:", ended-started)
+print(dictfinal)
+
+
+temp = json.dumps(dictfinal) 
+file  = open ('dictfinal.txt','w')
+file.write(temp)
+
+
+od = collections.OrderedDict(sorted(dictfinal.items()))
+print(od)         
+temp = json.dumps(od) 
+file  = open ('temp.txt','w')
+file.write(temp)

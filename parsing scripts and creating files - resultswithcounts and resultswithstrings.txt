@@ -1,0 +1,196 @@
+
+import re
+import pandas as pd
+
+df = pd.DataFrame(columns=['T1','T2','T1C','T2C','Type', 'Script'])
+df2 = pd.DataFrame(columns=['Tables'])
+count = 0
+
+def GetColumns(tostring, script_name):
+    global count
+    global df
+    
+    tostring = tostring.lower()
+    
+    tostring = re.sub(r'[()]', ' ', tostring)
+    tostring = re.sub(r'end select', ' ', tostring)
+    
+    #print(tostring)
+    
+    pattern = re.compile(r'(select)')
+
+    select_indexes = [m.start(0) for m in re.finditer(pattern, tostring)]
+    select_indexes.append(len(tostring))
+    print(select_indexes)
+
+
+    for select in range(len(select_indexes)-1):
+        
+        print("row value: "+str(select))
+        tempstring = tostring[select_indexes[select]:select_indexes[select+1]]
+        #print("TEMPSTRING:\n"+tempstring)
+        selects = re.search(r'select\s+', tempstring)
+        froms = re.search(r'\s+from\s+', tempstring)
+        plans = re.search(r'\s+plan\s+', tempstring)
+        withs = re.search(r'\s+with\s+', tempstring)
+        joins = re.search(r'\s+join\s+', tempstring)
+        left_join = re.search(r'\s*left\s+join', tempstring)
+        
+    
+        if joins is None or plans is None or selects is None or froms is None or left_join is not None:
+            continue
+        
+        if froms.start()>plans.start():
+            continue
+        if withs:
+            if withs.start()<plans.start():
+                continue
+    #    if joins is None or plans is None or selects is None or froms is None:
+     #       continue
+    
+        #print("Selected Columns: "+ tostring[selects.end():froms.start()])
+        #print("\nSelected tables: "+tostring[froms.end():plans.start()])
+        tablealias = {}
+        table_string = tempstring[froms.end():plans.start()]
+        #print("ts:\n"+table_string)
+        plan_string = tempstring[plans.start():select_indexes[select+1]]
+        #print("PS:\n"+plan_string)
+        pattern = re.compile(r'(\w+)\s(\w+)')
+
+        for (table, alias) in re.findall(pattern, table_string):
+        #print("table:"+table,  "alias:"+alias)
+            tablealias[alias]=table
+
+        print("table", tablealias)
+        
+        temp = []
+        for (k,v) in tablealias.items():
+            temp.append(v)
+        
+        temp.sort()
+        table_string = " ".join(temp)
+        
+        print(table_string)
+        #pattern = re.compile(r'plan\s*(\w+)\s')
+
+        #for plan in re.findall(pattern, plan_string):
+        #    print("plan by: "+tablealias[plan])
+            
+        #pattern = re.compile(r'join\s*(\w+)\s')
+    
+        #for join in re.findall(pattern, plan_string):
+        #    print("join with: "+tablealias[join])
+    
+    
+        pattern = re.compile(r'where\s*([a-z_]+)\.([a-z_]+)\s*=\s*([a-z_]+)\.([a-z_]+)\s')
+        #print(pattern)
+    
+        for (table1,col1,table2,col2) in re.findall(pattern, plan_string):
+        #print(tablealias[table1],col1,tablealias[table2],col2)
+            df.loc[count]= [tablealias[table1],tablealias[table2],col1,col2,'Inner', script_name]
+            df2.loc[count] = [table_string]
+            count+=1
+    
+    
+        pattern = re.compile(r'where\s*(\w+)\.(\w+)\s*=\s*outerjoin\s*(\w+)\.(\w+)\s')
+        #print(pattern)
+    
+        for (table1,col1,table2,col2) in re.findall(pattern, plan_string):
+        #print(tablealias[table1],col1,tablealias[table2],col2)
+            df.loc[count]= [tablealias[table1],tablealias[table2],col1,col2,'Outer', script_name]
+            df2.loc[count] = [table_string]
+            count+=1
+        
+        #pattern = re.compile(r'left join\s*(\w+)\s*(\w+)\s*on\s*(\w+)\.(\w+)\s*=\s*(\w+)\.(\w+)\s')
+    
+        # for (table2,t2alias,table1,col1,table2,col2) in re.findall(pattern, plan_string):
+            #print(tablealias[table1],col1,tablealias[table2],col2)
+            # df.loc[count]= [tablealias[table1],tablealias[table2],col1,col2,'Left']
+            # count+=1
+         
+    print(df.shape)
+    
+from elasticsearch import Elasticsearch, helpers
+
+# elsatic connection
+es = Elasticsearch(
+    ["cernccwesdev01.cernerasp.com"],
+    http_auth=("svc_ccl_elasticuser", "m[[sh>qRP8Lf<u_K"),
+    port=9200,
+    use_ssl=True,
+    verify_certs=False,
+    ca_certs=False,
+    timeout=1000000,
+)
+
+query = {
+    "query": {
+        "match": {
+            "client_mnemonic": "lowe_ma, yava_az, mcgh_ga, chld_dc, thc_tx, lcox_mo"
+        }
+        
+        
+    }
+}
+
+#a= es.search(index='CUSTOM-CCL', body = query)
+#print(a["hits"]["total"])# 1535812580
+
+    # api call to get data from elastic
+mydocs = helpers.scan(client=es, query=query, scroll="900m", index='CUSTOM-CCL', size=1, from_=0)
+
+num = 0
+for doc in mydocs:
+    
+    #print("Doc"+str(count)+":\n" + doc["_source"]["translated_ccl_text"])
+    #print(type(doc["_source"]["translated_ccl_text"]))
+    
+    #print(doc["_id"])
+    ccl_query = doc["_source"]["translated_ccl_text"]
+    script_name = doc["_source"]["script_name"]
+    
+    print("num=", num)
+    
+    #print("ccl=\n", ccl_query)
+    
+    ccl_query = ccl_query.lower()
+    
+    ccl_query = re.sub(r'[()]', ' ', ccl_query)
+    ccl_query = re.sub(r'end select', ' ', ccl_query)
+    
+    file = open('xyz4.txt', 'w+')
+    
+    file.write(ccl_query)
+    
+    file.close()
+    
+    try:
+        GetColumns(ccl_query, script_name)
+    except:
+        continue
+    
+    if num%100==0:
+        df.to_csv('my_csv4.csv', mode='a', header=False)
+        df2.to_csv('my_table_string4.csv', mode='a', header=False)
+        
+    if num==100000:
+        break
+    
+    num+=1
+    
+    #break
+#print(df)
+df.to_csv('result4.csv')
+x = df.groupby(['T1','T2','T1C','T2C'])['T1','T2','T1C','T2C'].count()
+x.to_csv('resultwithcounts4.csv')
+
+#------------------------------------------------
+#df= pd.read_csv('my_csv3.csv')
+df= pd.read_csv('my_table_string4.csv') 
+
+print(df.columns)
+#x = df.groupby(['T1','T2','T1C','T2C'])['T1','T2','T1C','T2C'].count()
+x = df.groupby(['C1'])['C1'].count()
+
+#x.to_csv('resultwithcounts3.csv')
+x.to_csv('resultwithcountsSTRINGS4.csv')
