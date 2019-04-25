@@ -114,8 +114,8 @@ from elasticsearch import Elasticsearch, helpers
 
 # elsatic connection
 es = Elasticsearch(
-    ["cernccwesdev01.cernerasp.com"],
-    http_auth=("svc_ccl_elasticuser", "m[[sh>qRP8Lf<u_K"),
+    #["xxx.xxx.com"],
+    http_auth=("", ""),
     port=9200,
     use_ssl=True,
     verify_certs=False,
@@ -126,7 +126,7 @@ es = Elasticsearch(
 query = {
     "query": {
         "match": {
-            "client_mnemonic": "lowe_ma, yava_az, mcgh_ga, chld_dc, thc_tx, lcox_mo"
+            "client_mnemonic": "xx_xx"
         }
         
         
